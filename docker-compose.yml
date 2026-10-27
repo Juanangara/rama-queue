@@ -1,0 +1,147 @@
+# Todo el sistema:            docker compose up -d --build
+# Solo la infraestructura:    docker compose up -d postgres rabbitmq redis   (y la app desde el IDE o con java -jar)
+# Más workers:                docker compose up -d --scale worker-detail=3
+#
+# Credenciales y acceso anónimo de Grafana son de desarrollo local. Todos los puertos se publican solo en 127.0.0.1.
+name: rama-queue
+
+x-app: &app
+  build:
+    context: .
+    target: app
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    rabbitmq: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  environment: &app-env
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    RABBITMQ_HOST: rabbitmq
+    REDIS_HOST: redis
+    # La Rama simulada. Para consultar la real: RAMA_BASE_URL=https://consultaprocesos.ramajudicial.gov.co:448/api/v2
+    RAMA_BASE_URL: ${RAMA_BASE_URL:-http://mock-rama:8089/api/v2}
+
+services:
+  # ─── Infraestructura ──────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    hostname: rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"     # AMQP
+      - "127.0.0.1:15672:15672"   # UI de gestión
+      - "127.0.0.1:15692:15692"   # métricas Prometheus
+    environment:
+      RABBITMQ_DEFAULT_USER: ramaqueue
+      RABBITMQ_DEFAULT_PASS: ramaqueue
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    ports:
+      - "127.0.0.1:5437:5432"     # 5437 en el host: 5432-5436 suelen estar ocupados por otros proyectos
+    environment:
+      POSTGRES_DB: ramaqueue
+      POSTGRES_USER: ramaqueue
+      POSTGRES_PASSWORD: ramaqueue
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ramaqueue -d ramaqueue"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ─── La Rama Judicial simulada ────────────────────────────────────────────────
+  mock-rama:
+    build:
+      context: .
+      target: mock
+    ports:
+      - "127.0.0.1:8089:8089"
+    restart: unless-stopped
+
+  # ─── Aplicación: un servicio por rol ──────────────────────────────────────────
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8087:8087"
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: api,demo
+
+  worker-search:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: worker-search,demo
+
+  worker-detail:
+    <<: *app
+    environment:
+      <<: *app-env
+      SPRING_PROFILES_ACTIVE: worker-detail,demo
+
+  # ─── Interfaz y observabilidad ────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ./dashboard
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8088}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - rabbitmq
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/rama-queue.json
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:
+  postgres-data:
+  redis-data:

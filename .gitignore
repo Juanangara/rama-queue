@@ -1,0 +1,19 @@
+# Documento de trabajo interno (no se publica)
+GUIA_INTERNA.md
+
+# Build
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Entorno local
+.env
+node_modules/
+.claude/
+
+# Dashboard
+dashboard/dist/

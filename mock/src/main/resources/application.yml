@@ -1,0 +1,23 @@
+server:
+  port: ${SERVER_PORT:8089}
+
+spring:
+  application:
+    name: rama-mock
+  threads:
+    virtual:
+      enabled: true
+
+mock:
+  seed: 20261026
+  latency-ms: 150          # latencia base de cada petición
+  jitter-ms: 100           # variación aleatoria sobre la latencia base
+  limit-per-minute: 120    # por encima de esto el mock responde 403 y bloquea
+  auto-block-seconds: 30   # duración del bloqueo automático
+  congested: true          # despachos con >1000 coincidencias para el apellido más común
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

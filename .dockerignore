@@ -1,0 +1,7 @@
+**/target/
+**/node_modules/
+dashboard/dist/
+.git/
+.idea/
+.claude/
+GUIA_INTERNA.md

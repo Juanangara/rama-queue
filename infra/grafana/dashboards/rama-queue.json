@@ -1,0 +1,82 @@
+{
+  "uid": "rama-queue",
+  "title": "rama-queue",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Circuit breaker",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max(rama_breaker_state)", "refId": "A" } ],
+      "fieldConfig": { "defaults": {
+        "mappings": [ { "type": "value", "options": {
+          "0": { "text": "Cerrado", "color": "green" },
+          "1": { "text": "Semiabierto", "color": "orange" },
+          "2": { "text": "Abierto", "color": "red" } } } ],
+        "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] } } },
+      "options": { "colorMode": "background", "textMode": "value" }
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Peticiones en vuelo y límite adaptativo (AIMD)",
+      "gridPos": { "x": 4, "y": 0, "w": 10, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "max(rama_governor_in_flight)", "legendFormat": "en vuelo", "refId": "A" },
+        { "expr": "max(rama_aimd_max_in_flight)", "legendFormat": "límite", "refId": "B" }
+      ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Separación entre peticiones (ms)",
+      "gridPos": { "x": 14, "y": 0, "w": 10, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max(rama_aimd_interval_ms)", "legendFormat": "intervalo", "refId": "A" } ]
+    },
+    {
+      "id": 4, "type": "stat", "title": "Tasa de aciertos de la caché",
+      "gridPos": { "x": 0, "y": 4, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sum(rama_catalog_cache_total{resultado=\"acierto\"}) / clamp_min(sum(rama_catalog_cache_total), 1)", "refId": "A" } ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "id": 5, "type": "timeseries", "title": "Peticiones a la Rama por segundo (por resultado)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sum by (resultado) (rate(rama_request_seconds_count[30s]))", "legendFormat": "{{resultado}}", "refId": "A" } ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Latencia media de la Rama (s)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "sum(rate(rama_request_seconds_sum[30s])) / clamp_min(sum(rate(rama_request_seconds_count[30s])), 0.001)", "legendFormat": "media", "refId": "A" } ]
+    },
+    {
+      "id": 7, "type": "timeseries", "title": "Ítems por estado (Postgres)",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max by (estado) (rama_workitems)", "legendFormat": "{{estado}}", "refId": "A" } ]
+    },
+    {
+      "id": 8, "type": "timeseries", "title": "Mensajes listos por cola",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max by (cola) (rama_queue_ready)", "legendFormat": "{{cola}}", "refId": "A" } ]
+    },
+    {
+      "id": 9, "type": "timeseries", "title": "Consumidores por cola",
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max by (cola) (rama_queue_consumers{cola=~\".*fetch\"})", "legendFormat": "{{cola}}", "refId": "A" } ]
+    },
+    {
+      "id": 10, "type": "timeseries", "title": "Sin confirmar por cola",
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [ { "expr": "max by (cola) (rama_queue_unacked{cola=~\".*fetch\"})", "legendFormat": "{{cola}}", "refId": "A" } ]
+    }
+  ]
+}
